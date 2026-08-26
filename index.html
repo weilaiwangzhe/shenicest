@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#ded7cd" />
+    <title>AR 化妆动作引导</title>
+  </head>
+  <body>
+    <main id="app">
+      <section class="camera-stage" aria-label="AR 化妆动作演示区">
+        <video id="camera" playsinline muted></video>
+
+        <div id="previewFace" class="preview-face" aria-hidden="true">
+          <div class="face-shape">
+            <span class="brow brow-left"></span>
+            <span class="brow brow-right"></span>
+            <span class="eye eye-left"></span>
+            <span class="eye eye-right"></span>
+            <span class="nose"></span>
+            <span class="mouth"></span>
+          </div>
+        </div>
+
+        <canvas id="webgl" aria-hidden="true"></canvas>
+
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">3D FACE · FRAME SEQUENCE</p>
+            <h1>动作示范</h1>
+          </div>
+          <button id="cameraButton" class="camera-button" type="button">
+            <span class="camera-dot"></span>
+            开启摄像头
+          </button>
+        </header>
+
+        <div class="status-wrap">
+          <div id="status" class="status" role="status">
+            <span class="status-mark"></span>
+            当前为预览模式
+          </div>
+        </div>
+
+        <div class="instruction">
+          <p id="stepLabel">03 · 粉底</p>
+          <h2 id="instructionText">从面中向外移动，沿脸部曲面均匀推开</h2>
+          <div class="progress-track"><span id="progressBar"></span></div>
+        </div>
+
+        <div class="action-panel" aria-label="选择化妆动作">
+          <div class="action-count">
+            <span id="actionNumber">35 / 61</span>
+            <strong id="actionCategory">粉底</strong>
+          </div>
+          <label class="action-select-wrap">
+            <span>动作</span>
+            <select id="officialActionSelect" aria-label="选择 61 种化妆动作"></select>
+          </label>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

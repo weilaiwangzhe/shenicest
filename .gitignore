@@ -1,0 +1,15 @@
+node_modules/
+dist/
+__pycache__/
+*.py[cod]
+
+# Local QA and generated inspection artifacts are not runtime dependencies.
+demo-*.png
+qa-*.png
+.codex-*.mjs
+asian-female-head.meshy
+sequence-preview/
+
+.DS_Store
+Thumbs.db
+*.log
