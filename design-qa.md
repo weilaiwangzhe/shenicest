@@ -1,5 +1,9 @@
 # Design QA
 
+> Historical record for the earlier support-mesh removal. The corrected 2D-to-3D
+> implementation no longer renders the full portrait behind the rotatable face and
+> uses real GLB tools; use the current automated tests and fresh QA screenshots.
+
 **Source visual truth**
 
 - `C:/Users/Keke_/AppData/Local/Temp/codex-clipboard-761e79d8-ee83-4146-abe4-d738e344f0cf.png`

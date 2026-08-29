@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#ded7cd" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <title>AR 化妆动作引导</title>
   </head>
   <body>
@@ -22,6 +23,8 @@
           </div>
         </div>
 
+        <canvas id="handOverlay" aria-hidden="true"></canvas>
+
         <canvas id="webgl" aria-hidden="true"></canvas>
 
         <header class="topbar">
@@ -29,10 +32,13 @@
             <p class="eyebrow">3D FACE · FRAME SEQUENCE</p>
             <h1>动作示范</h1>
           </div>
-          <button id="cameraButton" class="camera-button" type="button">
-            <span class="camera-dot"></span>
-            开启摄像头
-          </button>
+          <div class="topbar-actions">
+            <div id="hapticBadge" class="haptic-badge off" role="status">腕带桥未连接</div>
+            <button id="cameraButton" class="camera-button" type="button">
+              <span class="camera-dot"></span>
+              开启摄像头
+            </button>
+          </div>
         </header>
 
         <div class="status-wrap">

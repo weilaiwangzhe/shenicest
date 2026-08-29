@@ -7,8 +7,10 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0",
-    "test:actions": "node scripts/validate-official-actions.mjs"
+    "preview": "vite preview --host 0.0.0.0 --base /makeup/",
+    "test:actions": "node scripts/validate-official-actions.mjs",
+    "test:geometry": "node --test tests/face-geometry.test.mjs",
+    "test": "pnpm test:actions && pnpm test:geometry"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "1.0.1",

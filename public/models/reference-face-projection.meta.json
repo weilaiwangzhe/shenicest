@@ -1,0 +1,17 @@
+{
+  "output": "D:\\Codex-Projects\\悦悦\\shenicest-corrected\\shenicest-main\\public\\models\\reference-face-projection.png",
+  "size": [
+    1179,
+    1869
+  ],
+  "faceWidthPixels": 588.73,
+  "edgeBandPixels": 35,
+  "gutterPixels": 32,
+  "featherPixels": 3,
+  "changedPixels": 137405,
+  "changedCorePixels": 0,
+  "corePixelsUnchanged": true,
+  "sourceColorProfile": "embedded ICC -> sRGB",
+  "sourceSha256": "b6222ac118cd124654829d1430cd259e11ee80ef9a190ae3e613e104140276bd",
+  "outputSha256": "ce01e8b76cc7aa6777b11bcf94b67c40b351a2e5fda64e0029f6bc103656658a"
+}

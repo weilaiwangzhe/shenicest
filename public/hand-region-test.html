@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>手部离开范围 → 腕带震动 测试</title>
+<style>
+  :root {
+    --ok: #4a7657;
+    --warn: #c9a227;
+    --alert: #d14334;
+    --off: #8a8178;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    background: #17161a;
+    color: #e9e4dc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  #app {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-rows: auto 1fr;
+    gap: 14px;
+    width: min(1180px, 100%);
+    height: min(760px, 100%);
+  }
+  header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.04em; }
+  header .sub { font-size: 12px; color: #8f8a83; margin-top: 4px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 14px; border-radius: 999px;
+    font-size: 12px; white-space: nowrap;
+    background: #232229; border: 1px solid #38363e;
+  }
+  .badge::before {
+    content: ""; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--off);
+  }
+  .badge.ok::before { background: var(--ok); box-shadow: 0 0 0 4px rgba(74,118,87,.18); }
+  .badge.alert::before { background: var(--alert); box-shadow: 0 0 0 4px rgba(209,67,52,.2); animation: pulse 0.9s ease-in-out infinite; }
+  .badge.off::before { background: var(--off); opacity: .45; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+  .stage {
+    position: relative;
+    overflow: hidden;
+    border-radius: 18px;
+    background: #0d0d10;
+    border: 1px solid #2c2b31;
+    min-height: 0;
+  }
+  #video, #overlay {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+  }
+  #video { object-fit: contain; }
+  #overlay { pointer-events: none; z-index: 2; }
+  #regionBox {
+    position: absolute;
+    z-index: 3;
+    width: 42%; height: 42%;
+    left: 29%; top: 29%;
+    border: 2px dashed rgba(201, 162, 39, 0.9);
+    border-radius: 14px;
+    background: rgba(201, 162, 39, 0.07);
+    cursor: move;
+    touch-action: none;
+    transition: box-shadow 160ms ease, border-color 160ms ease;
+  }
+  #regionBox.active { border-color: var(--alert); border-style: solid; box-shadow: 0 0 0 4px rgba(209,67,52,.25), 0 0 30px rgba(209,67,52,.35); }
+  #regionBox .region-label {
+    position: absolute; top: -24px; left: 0;
+    font-size: 11px; color: #c9a227;
+    background: rgba(23,22,26,.8); padding: 2px 8px; border-radius: 6px;
+    white-space: nowrap;
+  }
+  #resizeHandle {
+    position: absolute; right: -7px; bottom: -7px;
+    width: 16px; height: 16px; border-radius: 4px;
+    background: #c9a227; cursor: nwse-resize;
+  }
+  #handStatus {
+    position: absolute; z-index: 4; left: 14px; bottom: 14px;
+    padding: 7px 13px; border-radius: 999px;
+    font-size: 13px; background: rgba(20,19,24,.82);
+    border: 1px solid #3a3841; backdrop-filter: blur(8px);
+  }
+  #handStatus.ok { color: #8fd19e; border-color: rgba(74,118,87,.6); }
+  #handStatus.warn { color: #e8cd6f; border-color: rgba(201,162,39,.6); }
+  #handStatus.alert { color: #ff8b7c; border-color: rgba(209,67,52,.7); }
+  #handStatus.off { color: #8f8a83; }
+
+  .panel {
+    display: flex; flex-direction: column; gap: 12px;
+    padding: 14px; border-radius: 18px;
+    background: #1d1c22; border: 1px solid #2c2b31;
+    min-height: 0; overflow: hidden;
+  }
+  .mode label { font-size: 11px; color: #8f8a83; display: block; margin-bottom: 6px; }
+  .mode select {
+    width: 100%; padding: 9px 10px; border-radius: 10px;
+    background: #26252c; color: #e9e4dc; border: 1px solid #3a3841;
+    font: inherit; font-size: 12px; outline: none; cursor: pointer;
+  }
+  .status-rows { display: grid; gap: 8px; }
+  .row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 11px; border-radius: 10px; background: #232229; font-size: 12px;
+  }
+  .row span { color: #8f8a83; }
+  .row strong { font-weight: 600; }
+  .row .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .log { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .log-title { font-size: 11px; color: #8f8a83; margin-bottom: 6px; }
+  #logList {
+    flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 0;
+    list-style: none; font-size: 12px; font-family: Consolas, monospace;
+  }
+  #logList li { padding: 5px 8px; border-radius: 6px; margin-bottom: 4px; background: #232229; color: #b9b4ab; }
+  #logList li .t { color: #6f6a63; margin-right: 8px; }
+  #logList li.out { border-left: 3px solid var(--alert); color: #ffb3a8; }
+  #logList li.in { border-left: 3px solid var(--ok); color: #a9d9b4; }
+  #logList li.conn { border-left: 3px solid #6f8fd1; color: #a9c0e8; }
+  .hint { font-size: 11px; line-height: 1.6; color: #8f8a83; margin: 0; }
+  #startBtn {
+    grid-column: 1 / -1;
+    padding: 13px; border-radius: 12px; border: 0;
+    font: inherit; font-size: 14px; font-weight: 600;
+    background: #3d5a46; color: #fff; cursor: pointer;
+    transition: background 160ms ease, transform 160ms ease;
+  }
+  #startBtn:hover { background: #4c6f57; transform: translateY(-1px); }
+  #startBtn.running { background: #4a3d3d; }
+  #startBtn:disabled { opacity: .6; cursor: wait; }
+  @media (max-width: 820px) {
+    body { padding: 10px; }
+    #app { grid-template-columns: 1fr; grid-template-rows: auto minmax(320px,1fr) auto auto; height: auto; }
+    .panel { max-height: 300px; }
+  }
+</style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div>
+        <h1>手部范围检测 · 腕带震动测试</h1>
+        <div class="sub">MediaPipe HandLandmarker · 手离开指定范围 → WebSocket → 桥终端打印命令</div>
+      </div>
+      <div id="bridgeStatus" class="badge off">腕带桥未连接</div>
+    </header>
+
+    <div class="stage" id="stage">
+      <video id="video" playsinline muted></video>
+      <canvas id="overlay"></canvas>
+      <div id="regionBox">
+        <span class="region-label">指定范围</span>
+        <div id="resizeHandle"></div>
+      </div>
+      <div id="handStatus" class="off">等待摄像头…</div>
+    </div>
+
+    <aside class="panel">
+      <div class="mode">
+        <label>判定模式（MediaPipe 手部检测）</label>
+        <select id="modeSelect">
+          <option value="bbox" selected>手部边界框 · 框与范围相交即「在」</option>
+          <option value="point">指尖点 · 食指/中指指尖进入范围即「在」</option>
+        </select>
+      </div>
+      <div class="status-rows">
+        <div class="row"><span>手部状态</span><strong id="handState">-</strong></div>
+        <div class="row"><span>范围判定</span><strong id="rangeState">-</strong></div>
+        <div class="row"><span>震动输出</span><strong id="vibState">关</strong></div>
+      </div>
+      <div class="log">
+        <div class="log-title">事件日志（同步发往桥终端）</div>
+        <ol id="logList"></ol>
+      </div>
+      <p class="hint">
+        拖动黄色「指定范围」框放到想检测的位置（比如你的化妆区域）。
+        手离开该范围超过 0.3s → 发 '3'（强震）；回到范围 → 发 '0'（停震）。
+        桥接终端窗口会同步打印每次命令。
+      </p>
+    </aside>
+
+    <button id="startBtn">开启摄像头</button>
+  </div>
+
+  <script type="module">
+    import { HandLandmarker, FilesetResolver } from "/vendor/vision_bundle.mjs";
+
+    // ── DOM ──
+    const stage = document.querySelector("#stage");
+    const video = document.querySelector("#video");
+    const canvas = document.querySelector("#overlay");
+    const ctx = canvas.getContext("2d");
+    const regionBox = document.querySelector("#regionBox");
+    const resizeHandle = document.querySelector("#resizeHandle");
+    const handStatus = document.querySelector("#handStatus");
+    const startBtn = document.querySelector("#startBtn");
+    const bridgeStatus = document.querySelector("#bridgeStatus");
+    const modeSelect = document.querySelector("#modeSelect");
+    const handStateEl = document.querySelector("#handState");
+    const rangeStateEl = document.querySelector("#rangeState");
+    const vibStateEl = document.querySelector("#vibState");
+    const logList = document.querySelector("#logList");
+
+    // ── 参数 ──
+    const LEAVE_MS = 300;    // 手离开范围超过该时长才触发
+    const HOLD_MS = 400;     // 震动期间重发 '3' 间隔（喂 Nano 3s 看门狗）
+    const ARM_MS = 4000;     // 手最近出现超过该时长 → 不判定（防未伸手误触发）
+
+    // ── 状态 ──
+    let landmarker = null;
+    let stream = null;
+    let lastVideoTime = -1;
+    let liveHands = [];
+    let raf = 0;
+    let lastHandSeen = -Infinity;
+    let phase = "idle";          // idle | out | vibrating
+    let phaseSince = 0;
+    let lastSend = 0;
+    let lastBoxRect = null;
+
+    // ── 范围框拖动 / 缩放 ──
+    let dragMode = null; // move | resize
+    regionBox.addEventListener("pointerdown", (e) => {
+      dragMode = e.target === resizeHandle ? "resize" : "move";
+      regionBox.setPointerCapture(e.pointerId);
+    });
+    regionBox.addEventListener("pointermove", (e) => {
+      if (dragMode !== "move" && dragMode !== "resize") return;
+      const r = regionBox.getBoundingClientRect();
+      const dx = e.movementX;
+      const dy = e.movementY;
+      if (dragMode === "move") {
+        const nx = Math.min(stage.clientWidth - r.width, Math.max(0, r.left - stage.getBoundingClientRect().left + dx));
+        const ny = Math.min(stage.clientHeight - r.height, Math.max(0, r.top - stage.getBoundingClientRect().top + dy));
+        regionBox.style.left = `${nx}px`;
+        regionBox.style.top = `${ny}px`;
+      } else {
+        const w = Math.min(stage.clientWidth, Math.max(80, r.width + dx));
+        const h = Math.min(stage.clientHeight, Math.max(80, r.height + dy));
+        regionBox.style.width = `${w}px`;
+        regionBox.style.height = `${h}px`;
+      }
+    });
+    const endDrag = () => { dragMode = null; };
+    regionBox.addEventListener("pointerup", endDrag);
+    regionBox.addEventListener("pointercancel", endDrag);
+
+    // ── WebSocket → 桥 ──
+    let ws = null;
+    let wsOpen = false;
+    let retryTimer = null;
+    function connectBridge() {
+      clearTimeout(retryTimer);
+      if (ws) { try { ws.close(); } catch (e) { /* noop */ } ws = null; }
+      try {
+        ws = new WebSocket("ws://127.0.0.1:8787");
+      } catch (e) { scheduleRetry(); return; }
+      ws.addEventListener("open", () => {
+        wsOpen = true;
+        bridgeStatus.className = "badge off";
+        bridgeStatus.textContent = "腕带桥已连接（等待命令）";
+        log("桥已连接", "conn");
+      });
+      ws.addEventListener("message", (ev) => {
+        try {
+          const m = JSON.parse(ev.data);
+          if (m.type === "ready") {
+            bridgeStatus.className = "badge ok";
+            bridgeStatus.textContent = `腕带桥已连接 · ${m.nano_port}`;
+          }
+        } catch (e) { /* noop */ }
+      });
+      ws.addEventListener("close", () => {
+        wsOpen = false;
+        bridgeStatus.className = "badge off";
+        bridgeStatus.textContent = "腕带桥未连接（2s 重连）";
+        if (phase === "vibrating") phase = "idle";
+        scheduleRetry();
+      });
+      ws.addEventListener("error", () => { bridgeStatus.className = "badge off"; });
+    }
+    function scheduleRetry() {
+      clearTimeout(retryTimer);
+      retryTimer = setTimeout(connectBridge, 2000);
+    }
+    function send(cmd) {
+      if (wsOpen && ws) {
+        try { ws.send(cmd); return true; } catch (e) { /* noop */ }
+      }
+      return false;
+    }
+    function log(text, kind = "") {
+      const li = document.createElement("li");
+      const t = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+      li.className = kind;
+      li.innerHTML = `<span class="t">${t}</span>${text}`;
+      logList.prepend(li);
+      while (logList.children.length > 40) logList.removeChild(logList.lastChild);
+    }
+
+    // ── MediaPipe 初始化 ──
+    async function init() {
+      const vision = await FilesetResolver.forVisionTasks(
+        "/vendor/wasm",
+      );
+      landmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: "/models/hand_landmarker.task",
+          delegate: "GPU",
+        },
+        runningMode: "VIDEO",
+        numHands: 2,
+        minHandDetectionConfidence: 0.5,
+        minHandPresenceConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+    }
+
+    // ── 坐标映射（video 完整帧 → stage 内 CSS 像素，contain 适配） ──
+    function stageRect() { return stage.getBoundingClientRect(); }
+    function toStagePx(x, y) {
+      const sr = stageRect();
+      const vw = video.videoWidth || 1;
+      const vh = video.videoHeight || 1;
+      const scale = Math.min(sr.width / vw, sr.height / vh);
+      const ox = (sr.width - vw * scale) / 2;
+      const oy = (sr.height - vh * scale) / 2;
+      return { x: x * vw * scale + ox, y: y * vh * scale + oy };
+    }
+    function boxRect() {
+      const sr = stageRect();
+      const r = regionBox.getBoundingClientRect();
+      return {
+        left: r.left - sr.left, top: r.top - sr.top,
+        right: r.right - sr.left, bottom: r.bottom - sr.top,
+      };
+    }
+    function handBBoxPx(hand) {
+      let minX = 1, minY = 1, maxX = 0, maxY = 0;
+      for (const lm of hand) {
+        if (lm.x < minX) minX = lm.x;
+        if (lm.y < minY) minY = lm.y;
+        if (lm.x > maxX) maxX = lm.x;
+        if (lm.y > maxY) maxY = lm.y;
+      }
+      const a = toStagePx(minX, minY);
+      const b = toStagePx(maxX, maxY);
+      return { left: a.x, top: a.y, right: b.x, bottom: b.y };
+    }
+    function inRegion(hand) {
+      const box = boxRect();
+      if (modeSelect.value === "bbox") {
+        const hb = handBBoxPx(hand);
+        // 手部边界框与范围框相交（且有一定重叠量才算，避免擦边）
+        const ix = Math.min(box.right, hb.right) - Math.max(box.left, hb.left);
+        const iy = Math.min(box.bottom, hb.bottom) - Math.max(box.top, hb.top);
+        if (ix <= 0 || iy <= 0) return false;
+        const overlap = (ix * iy) / Math.max(1, (hb.right - hb.left) * (hb.bottom - hb.top));
+        return overlap >= 0.15;
+      }
+      // 指尖模式：食指(8)/中指(12) 任一在框内
+      for (const idx of [8, 12]) {
+        const p = toStagePx(hand[idx].x, hand[idx].y);
+        if (p.x >= box.left && p.x <= box.right && p.y >= box.top && p.y <= box.bottom) return true;
+      }
+      return false;
+    }
+
+    // ── 每帧：检测 + 判定 + 状态机 ──
+    function tick() {
+      if (landmarker && stream && video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
+        try {
+          const result = landmarker.detectForVideo(video, performance.now());
+          liveHands = result.landmarks ?? [];
+          if (liveHands.length) lastHandSeen = performance.now();
+        } catch (e) { /* skip frame */ }
+      }
+      const now = performance.now();
+      let inRange = false;
+      if (stream && liveHands.length && (now - lastHandSeen) <= ARM_MS) {
+        inRange = liveHands.some((h) => inRegion(h));
+      }
+      // 状态机
+      if (phase === "vibrating") {
+        if (inRange) {
+          phase = "idle"; phaseSince = now;
+          if (send("0")) log("回到范围 → 发送 '0'（停震）", "in");
+        } else if (now - lastSend >= HOLD_MS) {
+          send("3"); lastSend = now;
+        }
+      } else if (!inRange) {
+        if (phase !== "out") { phase = "out"; phaseSince = now; }
+        if (now - phaseSince >= LEAVE_MS) {
+          phase = "vibrating"; lastSend = 0;
+          send("3"); lastSend = now;
+          log("手离开范围 → 发送 '3'（强震）", "out");
+        }
+      } else {
+        phase = "idle"; phaseSince = now;
+      }
+      updateUI(now, inRange);
+      draw();
+      raf = requestAnimationFrame(tick);
+    }
+
+    function updateUI(now, inRange) {
+      const box = boxRect();
+      lastBoxRect = box;
+      // 手状态文本
+      let handText, handCls;
+      if (!stream) { handText = "等待摄像头…"; handCls = "off"; }
+      else if (!liveHands.length) {
+        handText = (now - lastHandSeen) > ARM_MS ? "未检测到手（等待手进入画面）" : "手丢失…";
+        handCls = "off";
+      } else {
+        handText = inRange ? "手在范围内" : "手在画面中但已离开范围";
+        handCls = inRange ? "ok" : (phase === "vibrating" ? "alert" : "warn");
+      }
+      handStatus.textContent = handText;
+      handStatus.className = handCls;
+      handStateEl.textContent = liveHands.length ? `${liveHands.length} 只手 · ${liveHands[0].length} 点` : "无";
+      rangeStateEl.textContent = inRange ? "在范围内" : "离开范围";
+      rangeStateEl.style.color = inRange ? "#8fd19e" : (phase === "vibrating" ? "#ff8b7c" : "#e8cd6f");
+      const vibText = phase === "vibrating" ? "强震 '3'" : "关 '0'";
+      vibStateEl.textContent = vibText;
+      vibStateEl.style.color = phase === "vibrating" ? "#ff8b7c" : "#8f8a83";
+      regionBox.classList.toggle("active", phase === "vibrating");
+    }
+
+    // ── 绘制手部骨架 ──
+    const HAND_CONNECTIONS = [
+      [0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],
+      [9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17],
+    ];
+    function draw() {
+      const sr = stageRect();
+      if (canvas.width !== sr.width || canvas.height !== sr.height) {
+        canvas.width = sr.width;
+        canvas.height = sr.height;
+      }
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (!liveHands.length) return;
+      const inRange = phase === "vibrating" ? false : liveHands.some((h) => inRegion(h));
+      ctx.lineWidth = 2;
+      for (const hand of liveHands) {
+        const pts = hand.map((lm) => toStagePx(lm.x, lm.y));
+        // 连线
+        ctx.strokeStyle = inRange ? "rgba(143,209,158,.85)" : "rgba(255,139,124,.9)";
+        for (const [a, b] of HAND_CONNECTIONS) {
+          ctx.beginPath();
+          ctx.moveTo(pts[a].x, pts[a].y);
+          ctx.lineTo(pts[b].x, pts[b].y);
+          ctx.stroke();
+        }
+        // 指尖高亮
+        for (const idx of [4, 8, 12]) {
+          ctx.beginPath();
+          ctx.arc(pts[idx].x, pts[idx].y, 5, 0, Math.PI * 2);
+          ctx.fillStyle = idx === 8 ? "#ffd166" : "#6f8fd1";
+          ctx.fill();
+        }
+        // 边界框
+        const hb = handBBoxPx(hand);
+        ctx.strokeStyle = "rgba(111,143,209,.6)";
+        ctx.setLineDash([5, 5]);
+        ctx.strokeRect(hb.left, hb.top, hb.right - hb.left, hb.bottom - hb.top);
+        ctx.setLineDash([]);
+      }
+    }
+
+    // ── 摄像头 ──
+    async function start() {
+      startBtn.disabled = true;
+      startBtn.textContent = "正在启动…";
+      try {
+        await init();
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+        video.srcObject = stream;
+        await video.play();
+        lastVideoTime = -1;
+        startBtn.textContent = "关闭摄像头";
+        startBtn.classList.add("running");
+        startBtn.disabled = false;
+        log("摄像头已开启，把手伸进画面试试", "conn");
+        raf = requestAnimationFrame(tick);
+      } catch (e) {
+        console.error(e);
+        startBtn.disabled = false;
+        startBtn.textContent = "重新尝试";
+        handStatus.textContent = "摄像头不可用";
+        handStatus.className = "off";
+        log(`摄像头启动失败: ${e.message || e}`, "conn");
+      }
+    }
+    function stop() {
+      stream?.getTracks().forEach((t) => t.stop());
+      stream = null;
+      video.srcObject = null;
+      if (raf) cancelAnimationFrame(raf);
+      liveHands = [];
+      phase = "idle";
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      startBtn.textContent = "开启摄像头";
+      startBtn.classList.remove("running");
+      handStatus.textContent = "等待摄像头…";
+      handStatus.className = "off";
+    }
+    startBtn.addEventListener("click", () => (stream ? stop() : start()));
+
+    connectBridge();
+  </script>
+</body>
+</html>

@@ -31,7 +31,7 @@ button {
   overflow: hidden;
   isolation: isolate;
   background:
-    radial-gradient(circle at 50% 44%, rgba(255, 255, 255, 0.72), transparent 38%),
+    radial-gradient(circle at 50% 44%, rgba(248, 224, 207, 0.72), transparent 42%),
     linear-gradient(145deg, #e7e1d8 0%, #cec5ba 100%);
 }
 
@@ -53,7 +53,17 @@ button {
 
 #camera.is-visible {
   display: block;
-  transform: scaleX(-1) scale(1.015);
+  transform: scaleX(-1);
+}
+
+#handOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  transform: scaleX(-1); /* 与 #camera 镜像一致，直接用归一化坐标绘制 */
 }
 
 #webgl {
@@ -392,5 +402,61 @@ h1 {
   *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.haptic-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid rgba(34, 31, 27, 0.18);
+  border-radius: 999px;
+  background: rgba(250, 247, 242, 0.64);
+  backdrop-filter: blur(16px);
+  font-size: 12px;
+  white-space: nowrap;
+  transition: background 160ms ease;
+}
+
+.haptic-badge::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: #9a6b50;
+}
+
+.haptic-badge.ok::before {
+  background: #4a7657;
+  box-shadow: 0 0 0 4px rgba(74, 118, 87, 0.15);
+}
+
+.haptic-badge.alert::before {
+  background: #c0392b;
+  box-shadow: 0 0 0 4px rgba(192, 57, 43, 0.18);
+  animation: haptic-pulse 1s ease-in-out infinite;
+}
+
+.haptic-badge.off::before {
+  background: #9a6b50;
+  opacity: 0.45;
+}
+
+@keyframes haptic-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
   }
 }

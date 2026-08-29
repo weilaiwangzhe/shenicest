@@ -7,7 +7,7 @@
 
 ## 1. 项目交付范围
 
-这是一个无需业务后端的纯前端 WebGL Demo。页面使用 Three.js 渲染照片 UV 3D 人脸、序列帧重建立体工具和动作轨迹；启用摄像头后，使用 MediaPipe Face Landmarker 在浏览器内持续跟踪单张人脸的 478 个定位点。
+这是一个无需业务后端的纯前端 WebGL Demo。页面使用 Three.js 渲染照片直接投影的三维面部曲面、真实 GLB 化妆工具和动作轨迹；启用摄像头后，使用 MediaPipe Face Landmarker 在浏览器内持续跟踪单张人脸的 478 个定位点。
 
 当前交付状态：
 
@@ -16,11 +16,11 @@
 - `修容上庭长.json`、`嘴唇1.json` 原文件没有有效笔触，使用对应部位的 478 点语义路径回退。
 - 已接入原 App SDK 的 97 个区域定义，并读取每个动作的 `regionSlots`。
 - `closed` 闭合区域显示半透明橙色填充及边界；`openCurve` 只显示橙色引导线，不生成矩形填充。
-- 眉毛、眼影、粉底、修容、定妆五类工具共 111 帧挤出式 3D 模型，保留序列帧中的手与工具外观。
+- 11 类动作按语义使用 5 个真实闭合 GLB 工具；旧版 111 帧 PNG 轮廓挤出不再参与运行时渲染。
 - 摄像头模式逐视频帧刷新人脸和工具姿态，左右转头时工具、轨迹与化妆区域跟随面部。
 - 预览模式支持鼠标/触控拖拽旋转视角，双击恢复正面；摄像头模式由真实头部姿态控制，不接受鼠标旋转。
 - 不渲染妆后效果，不添加腮红、口红、磨皮、滤镜、星星、爱心或科技感装饰。
-- 照片预览保留完整人像背景，不再只挖出眼睛和嘴部。
+- 预览只显示可旋转的三维面部曲面，不在其后叠加完整二维肖像，因此侧转不会出现“双脸”。
 
 动作分类数量：
 
@@ -50,9 +50,10 @@
         └── 摄像头模式：MediaPipe Face Landmarker
                              └── 每帧输出 478 点并更新视频纹理 3D 人脸
                                            │
-动作 JSON ── 笔触绑定到源 478 点 ────────────┤
+动作 JSON ── 898 面片重心坐标绑定 ───────────┤
 区域库 ──── regionSlots 映射到 478 点区域 ──┤
-序列帧 ──── 轮廓挤出 3D 工具/手模型 ────────┤
+GLB 工具 ── 语义选择 + 刷头锚点 + 局部法线 ─┤
+序列帧 ──── 仅提供角度、节奏和尺度参考 ─────┤
                                            ▼
                                 Three.js / WebGL 合成渲染
 ```
@@ -81,15 +82,14 @@ webgl-makeup-guide-demo/
 ├─ public/
 │  ├─ actions/                   61 个 App 动作 JSON
 │  ├─ regions/all.json           97 个官方 478 点化妆区域
-│  ├─ models/                    参考照 UV、478 点、标准拓扑及模型许可
+│  ├─ models/                    sRGB投影纹理、478 点、标准拓扑及模型许可
 │  ├─ sequences/                 原透明序列帧和 motion.json
-│  ├─ volumes/                   111 帧挤出 3D 轮廓及对应纹理
+│  ├─ vendor/                    MediaPipe WASM 与离线运行时
 │  └─ reference-face.png         原始参考照片副本
 ├─ scripts/
 │  ├─ validate-official-actions.mjs  动作/区域完整性校验
 │  ├─ extract_sequence_motion.py     从 PNG 重新提取运动数据
-│  ├─ build_sequence_volumes.py      从 PNG 重新生成挤出轮廓数据
-│  └─ clean_reference_uv.py          参考照 UV 处理脚本
+│  └─ build_reference_projection.py  P3→sRGB、边缘延展、gutter与alpha生成
 ├─ dist/                         `pnpm build` 生成的生产静态文件
 ├─ README.md                     项目简介
 └─ HANDOFF.md                    本交接文档
@@ -189,9 +189,9 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
-    # actions、regions、models、sequences、volumes 的文件名较稳定，
+    # actions、regions、models、sequences 的文件名较稳定，
     # 不要 immutable，以免更新动作后用户仍拿到旧缓存。
-    location ~ ^/(actions|regions|models|sequences|volumes)/ {
+    location ~ ^/(actions|regions|models|sequences)/ {
         try_files $uri =404;
         expires 1h;
         add_header Cache-Control "public, max-age=3600";
@@ -230,7 +230,7 @@ https://seu-link.fit/makeup/
 ```
 
 源码已统一通过 `import.meta.env.BASE_URL` 解析 actions、models、regions、
-sequences 和 volumes 等运行时资源。`vite.config.js` 在生产构建时将 base
+sequences 和 vendor 等运行时资源。`vite.config.js` 在生产构建时将 base
 设置为 `/makeup/`，本地开发仍使用 `/`。部署时必须完整替换 `dist/`，不能
 只复制 `assets/`。
 
@@ -329,9 +329,9 @@ modelAssetPath: "/mediapipe/models/face_landmarker.task",
 
 ### 9.3 轨迹绑定方式
 
-动作 JSON 中的二维笔触点不会直接按屏幕坐标播放。代码会寻找源人脸上最近的 4 个定位点并计算权重，再把笔触重建到当前照片人脸或摄像头人脸上。因此用户转头时，轨迹、工具接触点和区域仍处于同一面部坐标系。
+动作 JSON 中的二维笔触点不会直接按屏幕坐标播放。代码会在 canonical face 的 898 个三角面中寻找可见且连续的表面层，面内点保存三角重心坐标；真正越界或跨层的点钳到安全边界并标记为 `reposition`，播放时平滑抬笔、隐藏接触圈后再落笔。当前契约为 11,209 点中 11,000 点面内精确重建、297 点显式重定位（其中 209 点真正位于脸外）。
 
-## 10. 序列帧与 3D 工具维护
+## 10. 动作参考序列与真实 3D 工具维护
 
 五组序列帧：
 
@@ -344,20 +344,19 @@ modelAssetPath: "/mediapipe/models/face_landmarker.task",
 | 定妆 `powder` | 38 | 12 fps |
 | 合计 | 111 | — |
 
-重建脚本：
+动作分析脚本：
 
 - `scripts/extract_sequence_motion.py`：从透明 PNG 分析位移、尺度、角度和接触位置，生成 `public/sequences/motion.json`。
-- `scripts/build_sequence_volumes.py`：裁切透明主体、提取轮廓并生成 `public/volumes/volume-models.json` 与逐帧纹理。
 
-这些脚本用于重新制作素材，不参与网页运行。若替换原序列帧，应先备份当前 `public/sequences/` 和 `public/volumes/`，再执行脚本，并逐动作检查：
+`extract_sequence_motion.py` 的输出供网页参考角度、节奏和尺度。旧版 2.5D 轮廓挤出脚本与数据（`build_sequence_volumes.py`、`public/volumes/`）已于 2026-08 清理，运行时从未加载。更换工具时应优先提供真实闭合 GLB，并逐动作检查：
 
 - 工具是否贴近正确化妆部位。
 - 正面、左右转头时是否穿入人脸。
-- 手和工具是否一起显示。
-- 轮廓侧壁是否出现破面或异常透明。
+- GLB 刷头锚点是否落在接触圈，长柄是否朝脸外。
+- 模型自身和脸部之间是否有正确深度遮挡。
 - 接触点是否与橙色轨迹一致。
 
-`src/main.js` 的 `VOLUME_SPECS` 控制五类工具的尺度、厚度、离脸距离和倾角。穿模优先小幅增加对应模式的 `contactLift`，不要通过整体放大模型解决。
+`src/main.js` 的 `TOOL_SPECS` 控制 11 类语义工具的 GLB、尺度、刷头端点、倾角和柔软接触端面。运行时先对齐真实接触面质心，再动态选择朝外倾角，并对硬质三角与 898 个脸面做精确相交检测；海绵/刷毛端面可由深度缓冲表现受控按压，金属和杆身必须保持零相交。当前素材不含真实 3D 手模型；不要重新把手部 PNG 挤出并称为真 3D。
 
 ## 11. 隐私与素材许可
 
@@ -367,7 +366,7 @@ modelAssetPath: "/mediapipe/models/face_landmarker.task",
 - `public/models/LICENSE.md` 记录了第三方 3D 工具与标准人脸拓扑来源。
 - 化妆工具 GLB 来源为 Poly Pizza Makeup Assets，CC0 1.0。
 - `canonical-face-model.obj` 来源于 Google MediaPipe，Apache License 2.0。
-- 参考人脸照片、生成 UV 和动作 JSON 属于业务素材；正式上线前需由素材提供方确认肖像权、数据使用范围和再分发权限。
+- 参考人脸照片、生成投影纹理和动作 JSON 属于业务素材；正式上线前需由素材提供方确认肖像权、数据使用范围和再分发权限。
 
 ## 12. 测试与上线验收
 
@@ -396,7 +395,7 @@ Vite 可能提示主 JS chunk 超过 500 kB，这是体积优化警告，不是�
 ### 12.2 人工验收清单
 
 - [ ] HTTPS 页面可以打开，无 404、白屏或控制台报错。
-- [ ] 首屏显示完整东亚女生参考人像和照片 UV 3D 人脸。
+- [ ] 首屏显示单一照片投影三维面部曲面；侧转时不得出现第二张背景脸、单侧色块、暗边或照片卡片。
 - [ ] 下拉框存在 61 个动作，分类和编号正确。
 - [ ] 动作轨迹、接触圈和化妆区域均为橙色系。
 - [ ] 眼影/眉毛开放区域没有矩形填充。
@@ -404,7 +403,7 @@ Vite 可能提示主 JS chunk 超过 500 kB，这是体积优化警告，不是�
 - [ ] 点击开启摄像头后能弹出浏览器权限请求。
 - [ ] 授权后持续显示 478 点，左右转头时人脸、工具、轨迹和区域同步。
 - [ ] 关闭摄像头后回到照片 3D 预览，摄像头指示灯熄灭。
-- [ ] 工具和手显示完整，没有明显穿模。
+- [ ] 真实 GLB 工具显示完整；柔软端面可呈现按压，硬质杆身/金属零穿模，正常接触距离不超过脸宽的 0.004。
 - [ ] 移动端页面无横向滚动，动作选择和摄像头按钮可操作。
 - [ ] 拒绝摄像头权限时页面仍能使用照片预览，不应崩溃。
 
@@ -438,7 +437,7 @@ Vite 可能提示主 JS chunk 超过 500 kB，这是体积优化警告，不是�
 
 ### 更新后用户仍看到旧轨迹或旧区域
 
-- 清理 CDN 缓存中的 `/actions/`、`/regions/`、`/volumes/`。
+- 清理 CDN 缓存中的 `/actions/`、`/regions/`。
 - 不要给这些稳定文件名设置 `immutable`。
 - 重新构建并完整替换 `dist/`，避免新旧文件混合。
 
