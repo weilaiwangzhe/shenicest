@@ -81,10 +81,9 @@ webgl-makeup-guide-demo/
 ├─ public/
 │  ├─ actions/                   61 个 App 动作 JSON
 │  ├─ regions/all.json           97 个官方 478 点化妆区域
-│  ├─ models/                    参考照 UV、478 点、标准拓扑及模型许可
+│  ├─ models/                    运行时参考照、UV、478 点、标准拓扑及模型许可
 │  ├─ sequences/                 原透明序列帧和 motion.json
 │  ├─ volumes/                   111 帧挤出 3D 轮廓及对应纹理
-│  └─ reference-face.png         原始参考照片副本
 ├─ scripts/
 │  ├─ validate-official-actions.mjs  动作/区域完整性校验
 │  ├─ extract_sequence_motion.py     从 PNG 重新提取运动数据
