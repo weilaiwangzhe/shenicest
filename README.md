@@ -64,7 +64,7 @@ pnpm dev
 
 ## 照片 UV 人脸
 
-参考照片：`public/reference-face.png`。
+参考照片：`public/models/reference-portrait.png`。
 
 生成文件：
 
